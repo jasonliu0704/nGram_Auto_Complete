@@ -15,18 +15,26 @@ public class LanguageModel {
 
 		@Override
 		public void setup(Context context) {
-			// how to get the threashold parameter from the configuration?
+			// get the threashold parameter from the configuration?
+			Configuration conf = context.getConfiguration();
+			threashold = conf.getInt("threshold", 20);
+
+			// hadoop args -> conf
+			//Mapper conf.get
+			// 20 here is default value
 		}
 
 		
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+			// useless string handling
 			if((value == null) || (value.toString().trim()).length() == 0) {
 				return;
 			}
+
 			//this is cool\t20
+			// separate word and count
 			String line = value.toString().trim();
-			
 			String[] wordsPlusCount = line.split("\t");
 			if(wordsPlusCount.length < 2) {
 				return;
@@ -35,14 +43,27 @@ public class LanguageModel {
 			String[] words = wordsPlusCount[0].split("\\s+");
 			int count = Integer.valueOf(wordsPlusCount[1]);
 
-			//how to filter the n-gram lower than threashold
-			
-			//this is --> cool = 20
+			//filter the n-gram lower than threashold
+			if(count < threashold){
+				return;
+			}
 
-			//what is the outputkey?
-			//what is the outputvalue?
-			
+
+			//this is --> cool = 20]
+			//extra dependency of last word on the whole gram
+			StringBuilder sb = new StringBuilder();
+			// concat all til last one
+			for(int i=0; i<words.size()-1; i++){
+				sb.append(words[i].append(" "));
+			}
+
 			//write key-value to reducer?
+			String outputKey = sb.toString().trim();
+			String outputValue = words[words.length -1];
+			if(outputKey != null && outputKey.length() >= 1){
+				// output data + count
+				context.write(new Text(outputKey), new Text(outputValue + "=" + count));
+			}
 		}
 	}
 
@@ -58,8 +79,37 @@ public class LanguageModel {
 
 		@Override
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-			
-			//can you use priorityQueue to rank topN n-gram, then write out to hdfs?
+			//use priorityQueue to rank topN n-gram, then write out to hdfs
+			TreeMap<Integer, List<String>> tm = new TreeMap<Integer, List<String>>(Collections.reverseOrder());
+			for(Text val: values) {
+				String curValue = val.toString().trim();
+				String word = curValue.split("=")[0].trim();
+				int count = Integer.parseInt(curValue.split("=")[1].trim());
+				if(tm.containsKey(count)) {
+					tm.get(count).add(word);
+				}
+				else {
+					List<String> list = new ArrayList<String>();
+					list.add(word);
+					tm.put(count, list);
+				}
+			}
+			// get topK
+			Iterator<Integer> iter = tm.keySet().iterator();
+			for(int j=0; iter.hasNext() && j<n; j++) {
+				int keyCount = iter.next();
+				List<String> words = tm.get(keyCount);
+				// write to db
+				for(String curWord: words) {
+					context.write(new DBOutputWritable(key.toString(), curWord, keyCount),NullWritable.get());
+					j++;
+					if(j >=n)break;
+				}
+			}
+
+
+
+
 		}
 	}
 }

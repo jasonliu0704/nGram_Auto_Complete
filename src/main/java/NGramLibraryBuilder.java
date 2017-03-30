@@ -22,7 +22,8 @@ public class NGramLibraryBuilder {
 		// map method
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			
+
+			// read in all sentences
 			String line = value.toString();
 			
 			line = line.trim().toLowerCase();
@@ -39,6 +40,7 @@ public class NGramLibraryBuilder {
 				return;
 			}
 
+			// construct and count nGram sequences
 			StringBuilder sb;
 			for(int i=0; i<words.length-1; i++){
 				sb = new StringBuilder();
